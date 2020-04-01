@@ -30,7 +30,6 @@ struct Date
 enum HttpStatus
 {
     Success = 200,
-    ServerError = 500,
     HttpError = 0,
     JsonError = 1,
     NotReady = 2

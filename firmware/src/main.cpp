@@ -1,4 +1,4 @@
-// Covid-19 
+// Covid-19
 // A Covid-19 interactive display for current global case data.
 //
 // Covid-19 API: https://documenter.getpostman.com/view/2568274/SzS8rjbe?version=latest#intro
@@ -32,7 +32,13 @@
 #include <utilities.h>
 
 #define TIMEOUT_SELECT 5000                    // ms
-#define DELAY_DISPLATS_UPDATE_AFTER_SELECT 100 // ms
+#define DELAY_DISPLAYS_UPDATE_AFTER_SELECT 500 // ms
+
+// Start date of filling the SD card and the animate mode.
+// Determined by the first available record date of the API minus one day.
+#define START_DATE_YEAR 2020
+#define START_DATE_MONTH 1
+#define START_DATE_DAY 21
 
 #define TFT1_CS 13
 #define TFT2_CS 12
@@ -70,7 +76,6 @@ TM1637Display ledDisplay2(LED_DISPLAY_CLK, LED_DISPLAY_2_DIO);
 #define PIN_NEOPIXEL 33
 CRGB leds[NUM_PIXELS];
 
-// WiFi
 String ssid;
 String password;
 const char *dataFilePath = "/covid19data.txt";
@@ -91,19 +96,37 @@ ConnectionStatus connectionStatus = NoConnection;
 bool indicators[12];
 int pixelToIndicatorMap[12][3] = {
     {0, 1, 2},
-    {3, 4, 5},
-    {6, 7, 8},
     {17, 16, 15},
-    {14, 13, 12},
-    {11, 10, 9},
     {18, 19, 20},
-    {21, 22, 23},
-    {24, 25, 26},
     {35, 34, 33},
+    {3, 4, 5},
+    {14, 13, 12},
+    {21, 22, 23},
     {32, 31, 30},
+    {6, 7, 8},
+    {11, 10, 9},
+    {24, 25, 26},
     {29, 28, 27}};
 
 CRGB indicatorColors[12] = {CRGB::Red, CRGB::Green, CRGB::Blue, CRGB::Red, CRGB::Green, CRGB::Blue, CRGB::Red, CRGB::Green, CRGB::Blue, CRGB::Red, CRGB::Green, CRGB::Blue};
+
+void Failure(String message)
+{
+  Serial.println(message);
+
+  tft1.fillScreen(ST77XX_BLACK);
+  tft2.fillScreen(ILI9341_BLACK);
+  tft3.fillScreen(ST77XX_BLACK);
+  tft2.setCursor(20, 40);
+  tft2.setTextSize(3);
+  tft2.println(message);
+
+  Serial.println("Program Halted.");
+
+  while (1)
+  {
+  } // DO NOTHING ELSE
+}
 
 void UpdateConnectionLed(ConnectionStatus status)
 {
@@ -129,8 +152,9 @@ void UpdateConnectionLed(ConnectionStatus status)
     }
     else if (status == DownloadedPaused)
     {
-      blinkDelay = 1000;
-      digitalWrite(PIN_LED_CONNECTION, !digitalRead(PIN_LED_CONNECTION));
+      // blinkDelay = 1000;
+      // digitalWrite(PIN_LED_CONNECTION, !digitalRead(PIN_LED_CONNECTION));
+      digitalWrite(PIN_LED_CONNECTION, HIGH);
     }
   }
 }
@@ -163,16 +187,24 @@ void UpdateIndicators(char eventsData[])
 
 void UpdateLedDisplays(Date date)
 {
-  ledDisplay1.showNumberDec(date.month * 100 + date.day, true);
+  ledDisplay1.showNumberDecEx(date.month * 100 + date.day, 0b01000000, true); // Show colon.
   ledDisplay2.showNumberDec(date.year, true);
 }
 
 void UpdateTFTDisplays(int countryID, StatsData globalData, StatsData countryData[], bool globalMode)
 {
   char buffer[20];
+  const int x13Offset = 20;
+  const int x2Offset = 30;
+  const int tft1OffsetTop = 29;
+  const int tft1OffsetBottom = 107;
+  const int tft2OffsetTop = 47;
+  const int tft2OffsetBottom = 187;
+  const int tft3OffsetTop = 27;
+  const int tft3OffsetBottom = 105;
 
   // TFT 1: top data.
-  tft1.setCursor(10, 20);
+  tft1.setCursor(x13Offset, tft1OffsetTop);
   tft1.setTextSize(4);
   if (globalMode)
   {
@@ -182,15 +214,15 @@ void UpdateTFTDisplays(int countryID, StatsData globalData, StatsData countryDat
   {
     FormatNumber(countryData[countryID].confirmed, buffer);
   }
-  tft1.println(buffer);
+  tft1.printf("%s%*s", buffer, 8, "");
 
   //TFT 1: bottom data
-  tft1.setCursor(10, 100);
+  tft1.setCursor(x13Offset, tft1OffsetBottom);
   tft1.setTextSize(2);
   if (globalMode)
   {
     FormatNumber(countryData[countryID].confirmed, buffer);
-    tft1.printf("%s: %s", countryCodes[countryID], buffer);
+    tft1.printf("%s: %s%*s", countryCodes[countryID], buffer, 8, "");
   }
   else
   {
@@ -198,7 +230,7 @@ void UpdateTFTDisplays(int countryID, StatsData globalData, StatsData countryDat
   }
 
   // TFT 2: top data.
-  tft2.setCursor(20, 40);
+  tft2.setCursor(x2Offset, tft2OffsetTop);
   tft2.setTextSize(8);
   if (globalMode)
   {
@@ -208,15 +240,15 @@ void UpdateTFTDisplays(int countryID, StatsData globalData, StatsData countryDat
   {
     FormatNumber(countryData[countryID].deaths, buffer);
   }
-  tft2.println(buffer);
+  tft2.printf("%s%*s", buffer, 8, "");
 
   // TFT 2: bottom data.
-  tft2.setCursor(20, 185);
+  tft2.setCursor(x2Offset, tft2OffsetBottom);
   tft2.setTextSize(4);
   if (globalMode)
   {
     FormatNumber(countryData[countryID].deaths, buffer);
-    tft2.printf("%s: %s%*s", countryCodes[countryID], buffer, 8, "");
+    tft2.printf("%s: %s%*s", countryCodes[countryID], buffer, 6, "");
   }
   else
   {
@@ -224,7 +256,7 @@ void UpdateTFTDisplays(int countryID, StatsData globalData, StatsData countryDat
   }
 
   // TFT 3: top data.
-  tft3.setCursor(10, 20);
+  tft3.setCursor(x13Offset, tft3OffsetTop);
   tft3.setTextSize(4);
   if (globalMode)
   {
@@ -234,15 +266,15 @@ void UpdateTFTDisplays(int countryID, StatsData globalData, StatsData countryDat
   {
     FormatNumber(countryData[countryID].recovered, buffer);
   }
-  tft3.println(buffer);
+  tft3.printf("%s%*s", buffer, 8, "");
 
   //TFT 3: bottom data
-  tft3.setCursor(10, 100);
+  tft3.setCursor(x13Offset, tft3OffsetBottom);
   tft3.setTextSize(2);
   if (globalMode)
   {
     FormatNumber(countryData[countryID].recovered, buffer);
-    tft3.printf("%s: %s", countryCodes[countryID], buffer);
+    tft3.printf("%s: %s%*s", countryCodes[countryID], buffer, 6, "");
   }
   else
   {
@@ -275,22 +307,14 @@ bool GetWifiCredentialsFromSDCard()
   return false;
 }
 
-HttpStatus GetGlobalByDate(Date *date, StatsData *globalData, bool latestFlag)
+HttpStatus GetGlobalByDate(Date *date, StatsData *globalData)
 {
   char path[200];
   char dateAsText[11];
   HTTPClient http;
 
   sprintf(dateAsText, "%02i-%02i-%02i", date->year, date->month, date->day);
-
-  if (latestFlag)
-  {
-    sprintf(path, "https://covidapi.info/api/v1/global");
-  }
-  else
-  {
-    sprintf(path, "https://covidapi.info/api/v1/global/%s", dateAsText);
-  }
+  sprintf(path, "https://covidapi.info/api/v1/global/%s", dateAsText);
 
   Serial.print("Connecting to API: ");
   Serial.println(path);
@@ -304,14 +328,7 @@ HttpStatus GetGlobalByDate(Date *date, StatsData *globalData, bool latestFlag)
   {
     Serial.printf("HTTP error code: %i\n", httpCode);
     http.end();
-    if (httpCode == 500)
-    {
-      return ServerError;
-    }
-    else
-    {
-      return HttpError;
-    }
+    return HttpError;
   }
 
   StaticJsonDocument<2048> doc;
@@ -329,16 +346,6 @@ HttpStatus GetGlobalByDate(Date *date, StatsData *globalData, bool latestFlag)
   globalData->confirmed = doc["result"]["confirmed"];
   globalData->deaths = doc["result"]["deaths"];
   globalData->recovered = doc["result"]["recovered"];
-
-  if (latestFlag)
-  {
-    int year, month, day;
-    const char *dateString = doc["date"];
-    sscanf(dateString, "%i-%i-%i", &year, &month, &day);
-    date->year = year;
-    date->month = month;
-    date->day = day;
-  }
 
   http.end();
   return Success;
@@ -365,14 +372,7 @@ HttpStatus GetCountryByDate(int countryId, Date date, StatsData *statsData)
   {
     Serial.printf("HTTP error code: %i\n", httpCode);
     http.end();
-    if (httpCode == 500)
-    {
-      return ServerError;
-    }
-    else
-    {
-      return HttpError;
-    }
+    return HttpError;
   }
 
   // Serial.println(http.getString());
@@ -391,7 +391,6 @@ HttpStatus GetCountryByDate(int countryId, Date date, StatsData *statsData)
   statsData->confirmed = doc["result"][dateAsText]["confirmed"];
   statsData->deaths = doc["result"][dateAsText]["deaths"];
   statsData->recovered = doc["result"][dateAsText]["recovered"];
-
 
   Serial.printf("GetCountryByDate: %u %u %u\n", statsData->confirmed, statsData->deaths, statsData->recovered); // TMEP
 
@@ -433,14 +432,34 @@ bool GetMostRecentRecord(Date *date, StatsData *globalData, StatsData countryDat
     date->month = month;
     date->day = day;
 
-    globalData->confirmed = doc["Confirmed"];
-    globalData->deaths = doc["Deaths"];
-    globalData->recovered = doc["Recovered"];
+    globalData->confirmed = doc["GlobalConfirmed"];
+    globalData->deaths = doc["GlobalDeaths"];
+    globalData->recovered = doc["GlobalRecovered"];
 
     const char *eventString = doc["Events"];
     strcpy(eventsData, eventString);
 
-    // TODO: GET COUNTRY DATA
+    int i = 0;
+    JsonArray arrayCountriesConfirmed = doc["CountriesConfirmed"].as<JsonArray>();
+    JsonArray arrayCountriesDeaths = doc["CountriesDeaths"].as<JsonArray>();
+    JsonArray arrayCountriesRecovered = doc["CountriesRecovered"].as<JsonArray>();
+    for (JsonVariant v : arrayCountriesConfirmed)
+    {
+      countryData[i].confirmed = v.as<unsigned int>();
+      i++;
+    }
+    i = 0;
+    for (JsonVariant v : arrayCountriesDeaths)
+    {
+      countryData[i].deaths = v.as<unsigned int>();
+      i++;
+    }
+    i = 0;
+    for (JsonVariant v : arrayCountriesRecovered)
+    {
+      countryData[i].recovered = v.as<unsigned int>();
+      i++;
+    }
   }
   file.close();
 
@@ -467,7 +486,7 @@ bool AppendDataToSd(Date date, StatsData globalData, StatsData countryData[], ch
   {
     confirmedJsonData.add(countryData[i].confirmed);
     deathsJsonData.add(countryData[i].deaths);
-    recoveredJsonData.add(countryData[i].recovered);   
+    recoveredJsonData.add(countryData[i].recovered);
   }
 
   Serial.println("Appending data to SD card:");
@@ -488,10 +507,10 @@ bool AppendDataToSd(Date date, StatsData globalData, StatsData countryData[], ch
 HttpStatus UpdateCardData(Date *date, StatsData *globalData, StatsData countryData[], char eventsData[])
 {
   static int countryId = 0;
-  static  StatsData updateCountryData[MAX_COUNTRIES];
-  Date updateDate; 
+  static StatsData updateCountryData[MAX_COUNTRIES];
+  Date updateDate;
   StatsData updateGlobalData;
- StatsData statsData;
+  StatsData statsData;
 
   // Deep copy of date to increment for updating record.
   updateDate.year = date->year;
@@ -513,12 +532,12 @@ HttpStatus UpdateCardData(Date *date, StatsData *globalData, StatsData countryDa
   if (++countryId == MAX_COUNTRIES)
   {
     // Get global data before appending the record to the SD.
-    HttpStatus status = GetGlobalByDate(&updateDate, &updateGlobalData, false);
+    HttpStatus status = GetGlobalByDate(&updateDate, &updateGlobalData);
     if (status != Success)
     {
       countryId--;
       return status;
-    } 
+    }
 
     if (!AppendDataToSd(updateDate, updateGlobalData, updateCountryData, eventsData))
     {
@@ -580,7 +599,6 @@ void UpdateCountryIndicator(int countryId, StatsData countryData[], bool globalM
 
   if (globalMode)
   {
-    // TODO: do math to determine brightness based on countryData
     int max = 0;
     int min = INT_MAX;
     for (int i = 0; i < MAX_COUNTRIES; i++)
@@ -590,12 +608,10 @@ void UpdateCountryIndicator(int countryId, StatsData countryData[], bool globalM
       if (countryData[i].confirmed < min)
         min = countryData[i].confirmed;
     }
-
     for (int i = 0; i < 16; i++)
     {
-      pwms1[i] = map(countryData[i].confirmed, min, max, 512, 4095);
-      pwms2[i] = map(countryData[i + MAX_COUNTRIES / 2].confirmed, min, max, 512, 4095);
-      ;
+      pwms1[i] = countryData[i].confirmed == 0 ? 0 : map(countryData[i].confirmed, min, max, 128, 4095);
+      pwms2[i] = countryData[i + MAX_COUNTRIES / 2].confirmed == 0 ? 0 : map(countryData[i + MAX_COUNTRIES / 2].confirmed, min, max, 128, 4095);
     }
   }
   else
@@ -607,11 +623,11 @@ void UpdateCountryIndicator(int countryId, StatsData countryData[], bool globalM
     }
     if (countryId < 16)
     {
-      pwms1[countryId] = 4095;
+      pwms1[countryId] = 2048;
     }
     else
     {
-      pwms2[countryId - 16] = 4095;
+      pwms2[countryId - 16] = 2048;
     }
   }
 
@@ -619,22 +635,82 @@ void UpdateCountryIndicator(int countryId, StatsData countryData[], bool globalM
   pwmController2.setChannelsPWM(0, 16, pwms2);
 }
 
-void Failure(String message)
+// Animate is a blocking.
+void Animate(int selectedCountryID)
 {
-  Serial.println(message);
+  Date dateDataAnimate;
+  StatsData globalDataAnimate;
+  char eventsDataAnimate[13];
+  StatsData countryDataAnimate[MAX_COUNTRIES];
+  char buffer[2048];
 
-  tft1.fillScreen(ST77XX_BLACK);
-  tft2.fillScreen(ILI9341_BLACK);
-  tft3.fillScreen(ST77XX_BLACK);
-  tft2.setCursor(20, 40);
-  tft2.setTextSize(3);
-  tft2.println(message);
-
-  Serial.println("Program Halted.");
-
-  while (1)
+  File file = SD.open(dataFilePath);
+  if (!file)
   {
-  } // DO NOTHING ELSE
+    Serial.printf("Failed to open file: %s\n", dataFilePath);
+    Failure("No SD card.");
+  }
+
+  while (file.readBytesUntil('\n', buffer, sizeof(buffer) - 1))
+  {
+
+    StaticJsonDocument<2048> doc;
+    DeserializationError error = deserializeJson(doc, buffer);
+
+    if (error)
+    {
+      Serial.print(F("deserializeJson() failed: "));
+      Serial.println(error.c_str());
+      Failure("Data corrupt.");
+    }
+
+    int year, month, day;
+    const char *dateString = doc["Date"];
+    sscanf(dateString, "%i-%i-%i", &year, &month, &day);
+    dateDataAnimate.year = year;
+    dateDataAnimate.month = month;
+    dateDataAnimate.day = day;
+
+    globalDataAnimate.confirmed = doc["GlobalConfirmed"];
+    globalDataAnimate.deaths = doc["GlobalDeaths"];
+    globalDataAnimate.recovered = doc["GlobalRecovered"];
+
+    const char *eventString = doc["Events"];
+    strcpy(eventsDataAnimate, eventString);
+
+    int i = 0;
+    JsonArray arrayCountriesConfirmed = doc["CountriesConfirmed"].as<JsonArray>();
+    JsonArray arrayCountriesDeaths = doc["CountriesDeaths"].as<JsonArray>();
+    JsonArray arrayCountriesRecovered = doc["CountriesRecovered"].as<JsonArray>();
+    for (JsonVariant v : arrayCountriesConfirmed)
+    {
+      countryDataAnimate[i].confirmed = v.as<unsigned int>();
+      i++;
+    }
+    i = 0;
+    for (JsonVariant v : arrayCountriesDeaths)
+    {
+      countryDataAnimate[i].deaths = v.as<unsigned int>();
+      i++;
+    }
+    i = 0;
+    for (JsonVariant v : arrayCountriesRecovered)
+    {
+      countryDataAnimate[i].recovered = v.as<unsigned int>();
+      i++;
+    }
+
+    bool globalModeAnimate = true;
+    UpdateTFTDisplays(selectedCountryID, globalDataAnimate, countryDataAnimate, globalModeAnimate);
+    UpdateLedDisplays(dateDataAnimate);
+    UpdateIndicators(eventsDataAnimate);
+    UpdateCountryIndicator(selectedCountryID, countryDataAnimate, globalModeAnimate);
+
+    if (digitalRead(PIN_BUTTON_ANIMATE) == 0)
+    {
+      return;
+    }
+  }
 }
 
 bool InitSDCard()
@@ -713,9 +789,9 @@ void setup()
   {
     // File contains no data, create first record.
     // Date based on first record date provided by API.
-    dateData.year = 2020;
-    dateData.month = 1;
-    dateData.day = 21;
+    dateData.year = START_DATE_YEAR;
+    dateData.month = START_DATE_MONTH;
+    dateData.day = START_DATE_DAY;
     if (!AppendDataToSd(dateData, globalData, countryData, eventsData))
     {
       Failure("SD card error.");
@@ -739,7 +815,7 @@ void loop(void)
 {
 
   static unsigned long selectTimoutMillis;
-  static int updateDisplayDelayMillis = 0;
+  static unsigned int updateDisplayDelayMillis = 0;
   static unsigned long WifiTimeoutMillis = 0;
   static bool displayConnectionStatus = false;
   static int updateSdCardMillis = 0;
@@ -771,9 +847,9 @@ void loop(void)
   }
 
   // Check if display needs updated.
-  if ((updateDisplayDelayMillis + DELAY_DISPLATS_UPDATE_AFTER_SELECT) < millis())
+  if ((updateDisplayDelayMillis + DELAY_DISPLAYS_UPDATE_AFTER_SELECT) < millis())
   {
-    updateDisplayDelayMillis = LONG_MAX - DELAY_DISPLATS_UPDATE_AFTER_SELECT;
+    updateDisplayDelayMillis = LONG_MAX - (DELAY_DISPLAYS_UPDATE_AFTER_SELECT * 2); // Prevent constant updates
     UpdateTFTDisplays(selectedCountryID, globalData, countryData, globalMode);
     UpdateLedDisplays(dateData);
     UpdateIndicators(eventsData);
@@ -794,14 +870,14 @@ void loop(void)
       else if (status == Success)
       {
         connectionStatus = DownloadingRecords;
-        updateDisplayDelayMillis = millis() - DELAY_DISPLATS_UPDATE_AFTER_SELECT;
+        updateDisplayDelayMillis = millis() - DELAY_DISPLAYS_UPDATE_AFTER_SELECT;
         updateSdCardDelay = 100;
       }
-      else if (status == ServerError)
+      else if (status == HttpError)
       {
         connectionStatus = DownloadedPaused;
         updateSdCardDelay = 3600000;
-        Serial.printf("Sever error detected, %ims until next API Get attempt.", updateSdCardDelay);
+        Serial.printf("Sever error detected, %ims until next API Get attempt.\n", updateSdCardDelay);
       }
     }
   }
@@ -818,7 +894,7 @@ void loop(void)
     UpdateCountryIndicator(selectedCountryID, countryData, globalMode);
   }
 
-  // Check for select timeout.
+  // Check for select mode timeout.
   if ((selectTimoutMillis + TIMEOUT_SELECT) < millis())
   {
     selectTimoutMillis = LONG_MAX - TIMEOUT_SELECT;
@@ -838,9 +914,30 @@ void loop(void)
     }
   }
 
-  // Process Animate function.
-  digitalWrite(PIN_LED_ANIMATE, digitalRead(PIN_BUTTON_ANIMATE));
-  //
+  // Process Animate mode.
+  static unsigned long animateMillis;
+  if (digitalRead(PIN_BUTTON_ANIMATE) == 0)
+  {
+    if ((animateMillis + 200) < millis()) // Prevent animate from starting over if animate is canceled during animation.
+    {
+      digitalWrite(PIN_LED_ANIMATE, HIGH);
+
+      if (connectionStatus != NoConnection)
+      {
+        connectionStatus = Connected;
+      }
+
+      Serial.println("Animate started.");
+
+      Animate(selectedCountryID); // BLOCKING
+
+      Serial.println("Animate finished.");
+
+      digitalWrite(PIN_LED_ANIMATE, LOW);
+      updateDisplayDelayMillis = millis() - DELAY_DISPLAYS_UPDATE_AFTER_SELECT;
+      animateMillis = millis();
+    }
+  }
 
   UpdateConnectionLed(connectionStatus);
 }

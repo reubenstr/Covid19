@@ -5,7 +5,7 @@
 void IncrementDate(Date &date)
 {
     const int daysPerMonth[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-    if (++date.day > daysPerMonth[date.month])
+    if (++date.day > daysPerMonth[date.month - 1])
     {
         date.day = 1;
         if (++date.month > 12)
