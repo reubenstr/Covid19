@@ -15,9 +15,9 @@ struct DisplayData
 
 struct StatsData
 {
-    int confirmed;
-    int deaths;
-    int recovered;
+    unsigned int confirmed;
+    unsigned int deaths;
+    unsigned int recovered;
 };
 
 struct Date
@@ -43,4 +43,12 @@ enum IndicatorMode
     IndicatorFlash
 };
 
+
+enum ConnectionStatus
+{
+    NoConnection, 
+    Connected,
+    DownloadingRecords,
+    DownloadedPaused
+};
 

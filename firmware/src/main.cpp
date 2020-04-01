@@ -1,11 +1,12 @@
-//
+// Covid-19 
+// A Covid-19 interactive display for current global case data.
 //
 // Covid-19 API: https://documenter.getpostman.com/view/2568274/SzS8rjbe?version=latest#intro
 // Notes:
 // Wifi credentials stored on SD card.
 
 // SD card is required for functionality, but may be disable for development.
-//#define USE_SD
+#define USE_SD
 
 #include <Arduino.h>
 #include <main.h>
@@ -72,7 +73,7 @@ CRGB leds[NUM_PIXELS];
 // WiFi
 String ssid;
 String password;
-const char *dataFilePath = "/covid19data.csv";
+const char *dataFilePath = "/covid19data.txt";
 const char *wifiFilePath = "/wifi.txt";
 
 // Global variables
@@ -81,8 +82,10 @@ Date dateData;
 StatsData globalData;
 StatsData countryData[MAX_COUNTRIES];
 DisplayData displayData;
+char eventsData[13];
 int selectedCountryID = 0;
 bool globalMode = false;
+ConnectionStatus connectionStatus = NoConnection;
 
 #define NUM_INDICATORS 12
 bool indicators[12];
@@ -100,28 +103,56 @@ int pixelToIndicatorMap[12][3] = {
     {32, 31, 30},
     {29, 28, 27}};
 
-CRGB indicatorColors[12] = {CRGB::Red, CRGB::Green, CRGB::Blue,CRGB::Red,CRGB::Green, CRGB::Blue, CRGB::Red, CRGB::Green, CRGB::Blue, CRGB::Red, CRGB::Green, CRGB::Blue};
+CRGB indicatorColors[12] = {CRGB::Red, CRGB::Green, CRGB::Blue, CRGB::Red, CRGB::Green, CRGB::Blue, CRGB::Red, CRGB::Green, CRGB::Blue, CRGB::Red, CRGB::Green, CRGB::Blue};
 
-
-void UpdateIndicators(char indicatorData[])
+void UpdateConnectionLed(ConnectionStatus status)
 {
+  static unsigned long connectionMillis;
+  static int blinkDelay = 100;
 
+  if ((connectionMillis + blinkDelay) < millis())
+  {
+    connectionMillis = millis();
+
+    if (status == NoConnection)
+    {
+      digitalWrite(PIN_LED_CONNECTION, LOW);
+    }
+    else if (status == Connected)
+    {
+      digitalWrite(PIN_LED_CONNECTION, HIGH);
+    }
+    else if (status == DownloadingRecords)
+    {
+      blinkDelay = 250;
+      digitalWrite(PIN_LED_CONNECTION, !digitalRead(PIN_LED_CONNECTION));
+    }
+    else if (status == DownloadedPaused)
+    {
+      blinkDelay = 1000;
+      digitalWrite(PIN_LED_CONNECTION, !digitalRead(PIN_LED_CONNECTION));
+    }
+  }
+}
+
+void UpdateIndicators(char eventsData[])
+{
   for (int i = 0; i < NUM_INDICATORS; i++)
   {
     for (int j = 0; j < 3; j++)
     {
       int pixelIndex = pixelToIndicatorMap[i][j];
-      if (indicatorData[i] == '0')
+      if (eventsData[i] == '0')
       {
         leds[pixelIndex] = CRGB::Black;
       }
-      else if (indicatorData[i] == '1')
+      else if (eventsData[i] == '1')
       {
         leds[pixelIndex] = indicatorColors[i];
       }
-    } 
+    }
   }
-  
+
   for (int i = 36; i < 48; i++)
   {
     leds[i] = CRGB::Green;
@@ -129,45 +160,6 @@ void UpdateIndicators(char indicatorData[])
 
   FastLED.show();
 }
-
-/*
-  static unsigned long indicatorMillis = 0;
-  static int currentIndicator = 0;
-
-  if ((indicatorMillis + 1000) < millis())
-  {
-    indicatorMillis = millis();
-
-    if (++currentIndicator == NUM_INDICATORS)
-    {
-      currentIndicator = 0;
-    }
-
-    indicators[currentIndicator] = true;
-
-  
-    for (int i = 0; i < NUM_INDICATORS; i++)
-    {
-      for (int j = 0; j < 3; j++)
-      {
-        int pixelIndex = pixelToIndicatorMap[i][j];
-
-        if (indicators[i])
-        {
-          leds[pixelIndex] = CRGB::Green;
-        }
-        else
-        {
-          leds[pixelIndex] = CRGB::Black;
-        }
-      }      
-    }
-
-FastLED.show();
-
-  }
-  */
-
 
 void UpdateLedDisplays(Date date)
 {
@@ -324,6 +316,8 @@ HttpStatus GetGlobalByDate(Date *date, StatsData *globalData, bool latestFlag)
 
   StaticJsonDocument<2048> doc;
   DeserializationError error = deserializeJson(doc, http.getStream());
+  serializeJson(doc, Serial);
+  Serial.println();
 
   if (error)
   {
@@ -332,9 +326,9 @@ HttpStatus GetGlobalByDate(Date *date, StatsData *globalData, bool latestFlag)
     return JsonError;
   }
 
-  globalData->confirmed = doc["result"]["confirmed"].as<int>();
-  globalData->deaths = doc["result"]["deaths"].as<int>();
-  globalData->recovered = doc["result"]["recovered"].as<int>();
+  globalData->confirmed = doc["result"]["confirmed"];
+  globalData->deaths = doc["result"]["deaths"];
+  globalData->recovered = doc["result"]["recovered"];
 
   if (latestFlag)
   {
@@ -385,6 +379,8 @@ HttpStatus GetCountryByDate(int countryId, Date date, StatsData *statsData)
 
   StaticJsonDocument<2048> doc;
   DeserializationError error = deserializeJson(doc, http.getStream());
+  serializeJson(doc, Serial);
+  Serial.println();
 
   if (error)
   {
@@ -392,15 +388,18 @@ HttpStatus GetCountryByDate(int countryId, Date date, StatsData *statsData)
     Serial.println(error.c_str());
     return JsonError;
   }
-  statsData->confirmed = doc["result"][dateAsText]["confirmed"].as<int>();
-  statsData->deaths = doc["result"][dateAsText]["deaths"].as<int>();
-  statsData->recovered = doc["result"][dateAsText]["recovered"].as<int>();
+  statsData->confirmed = doc["result"][dateAsText]["confirmed"];
+  statsData->deaths = doc["result"][dateAsText]["deaths"];
+  statsData->recovered = doc["result"][dateAsText]["recovered"];
+
+
+  Serial.printf("GetCountryByDate: %u %u %u\n", statsData->confirmed, statsData->deaths, statsData->recovered); // TMEP
 
   http.end();
   return Success;
 }
 
-bool GetMostRecentRecord(Date *date, StatsData *globalData, StatsData countryData[])
+bool GetMostRecentRecord(Date *date, StatsData *globalData, StatsData countryData[], char eventsData[])
 {
   char buffer[2048];
 
@@ -438,6 +437,9 @@ bool GetMostRecentRecord(Date *date, StatsData *globalData, StatsData countryDat
     globalData->deaths = doc["Deaths"];
     globalData->recovered = doc["Recovered"];
 
+    const char *eventString = doc["Events"];
+    strcpy(eventsData, eventString);
+
     // TODO: GET COUNTRY DATA
   }
   file.close();
@@ -445,14 +447,14 @@ bool GetMostRecentRecord(Date *date, StatsData *globalData, StatsData countryDat
   return recordFoundFlag;
 }
 
-bool AppendDataToSd(Date date, StatsData globalData, StatsData countryData[])
+bool AppendDataToSd(Date date, StatsData globalData, StatsData countryData[], char eventsData[])
 {
   // Generate JSON string from collected data.
   DynamicJsonDocument doc(2048);
   char dateAsText[11];
   sprintf(dateAsText, "%02i-%02i-%02i", date.year, date.month, date.day);
   doc["Date"] = dateAsText;
-  doc["Events"] = 0;
+  doc["Events"] = eventsData;
   doc["GlobalConfirmed"] = globalData.confirmed;
   doc["GlobalDeaths"] = globalData.deaths;
   doc["GlobalRecovered"] = globalData.recovered;
@@ -465,10 +467,10 @@ bool AppendDataToSd(Date date, StatsData globalData, StatsData countryData[])
   {
     confirmedJsonData.add(countryData[i].confirmed);
     deathsJsonData.add(countryData[i].deaths);
-    recoveredJsonData.add(countryData[i].recovered);
+    recoveredJsonData.add(countryData[i].recovered);   
   }
 
-  Serial.print("Appending data to SD card: ");
+  Serial.println("Appending data to SD card:");
   serializeJson(doc, Serial);
   Serial.println();
   File file = SD.open(dataFilePath, FILE_APPEND);
@@ -480,15 +482,16 @@ bool AppendDataToSd(Date date, StatsData globalData, StatsData countryData[])
   return true;
 }
 
-// Update records from API.
+// Update SD card data by using the API to get data.
+// When an update for a complete record is finished update current working record (that is displayed).
 // Non-blocking.
-HttpStatus UpdateCardData(Date *date, StatsData *globalData, StatsData countryData[])
+HttpStatus UpdateCardData(Date *date, StatsData *globalData, StatsData countryData[], char eventsData[])
 {
   static int countryId = 0;
-  Date updateDate;
-  StatsData updateCountryData[MAX_COUNTRIES];
+  static  StatsData updateCountryData[MAX_COUNTRIES];
+  Date updateDate; 
   StatsData updateGlobalData;
-  StatsData statsData;
+ StatsData statsData;
 
   // Deep copy of date to increment for updating record.
   updateDate.year = date->year;
@@ -507,7 +510,7 @@ HttpStatus UpdateCardData(Date *date, StatsData *globalData, StatsData countryDa
   updateCountryData[countryId].recovered = statsData.recovered;
 
   // Check if all the data is collected for this date.
-  if (++countryId == 3) // MAX_COUNTRIES)
+  if (++countryId == MAX_COUNTRIES)
   {
     // Get global data before appending the record to the SD.
     HttpStatus status = GetGlobalByDate(&updateDate, &updateGlobalData, false);
@@ -515,9 +518,9 @@ HttpStatus UpdateCardData(Date *date, StatsData *globalData, StatsData countryDa
     {
       countryId--;
       return status;
-    }
+    } 
 
-    if (!AppendDataToSd(updateDate, updateGlobalData, updateCountryData))
+    if (!AppendDataToSd(updateDate, updateGlobalData, updateCountryData, eventsData))
     {
       return JsonError;
     }
@@ -689,6 +692,7 @@ void setup()
   tft3.setTextColor(ST77XX_GREEN, ST77XX_BLACK);
 
   FastLED.addLeds<NEOPIXEL, PIN_NEOPIXEL>(leds, NUM_PIXELS);
+  FastLED.setBrightness(128);
 
   displayData.defaultCountryId = 14; // USA
   displayData.selectMode = false;
@@ -705,14 +709,14 @@ void setup()
     Failure("No SD card.");
   }
 
-  if (!GetMostRecentRecord(&dateData, &globalData, countryData))
+  if (!GetMostRecentRecord(&dateData, &globalData, countryData, eventsData))
   {
     // File contains no data, create first record.
     // Date based on first record date provided by API.
     dateData.year = 2020;
     dateData.month = 1;
     dateData.day = 21;
-    if (!AppendDataToSd(dateData, globalData, countryData))
+    if (!AppendDataToSd(dateData, globalData, countryData, eventsData))
     {
       Failure("SD card error.");
     }
@@ -749,7 +753,7 @@ void loop(void)
     displayConnectionStatus = true;
     if ((WifiTimeoutMillis + 1000) < millis())
     {
-      digitalWrite(PIN_LED_CONNECTION, LOW);
+      connectionStatus = NoConnection;
       WifiTimeoutMillis = millis();
       Serial.println("WiFi disconnected, attempting to connect...");
       WiFi.begin((const char *)ssid.c_str(), (const char *)password.c_str());
@@ -760,7 +764,7 @@ void loop(void)
     if (displayConnectionStatus)
     {
       displayConnectionStatus = false;
-      digitalWrite(PIN_LED_CONNECTION, HIGH);
+      connectionStatus = Connected;
       Serial.print("WiFi connected to ");
       Serial.println(WiFi.localIP());
     }
@@ -772,6 +776,7 @@ void loop(void)
     updateDisplayDelayMillis = LONG_MAX - DELAY_DISPLATS_UPDATE_AFTER_SELECT;
     UpdateTFTDisplays(selectedCountryID, globalData, countryData, globalMode);
     UpdateLedDisplays(dateData);
+    UpdateIndicators(eventsData);
   }
 
 #if defined(USE_SD)
@@ -780,18 +785,21 @@ void loop(void)
   {
     if (WiFi.status() == WL_CONNECTED)
     {
-      HttpStatus status = UpdateCardData(&dateData, &globalData, countryData);
+      HttpStatus status = UpdateCardData(&dateData, &globalData, countryData, eventsData);
       if (status == NotReady)
       {
         // Do nothing.
+        connectionStatus = DownloadingRecords;
       }
       else if (status == Success)
       {
-        updateDisplayFlag = true;
+        connectionStatus = DownloadingRecords;
+        updateDisplayDelayMillis = millis() - DELAY_DISPLATS_UPDATE_AFTER_SELECT;
         updateSdCardDelay = 100;
       }
       else if (status == ServerError)
       {
+        connectionStatus = DownloadedPaused;
         updateSdCardDelay = 3600000;
         Serial.printf("Sever error detected, %ims until next API Get attempt.", updateSdCardDelay);
       }
@@ -832,17 +840,7 @@ void loop(void)
 
   // Process Animate function.
   digitalWrite(PIN_LED_ANIMATE, digitalRead(PIN_BUTTON_ANIMATE));
+  //
 
-  // Process indicators.
-
-  char temp[13] = "111111111111";
-
-  static long tempm;
-  if ((tempm + 1000) < millis())
-  {
-    tempm = millis();
-    UpdateIndicators(temp);
-  }
-
-  
+  UpdateConnectionLed(connectionStatus);
 }
