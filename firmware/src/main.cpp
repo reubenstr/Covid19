@@ -1,11 +1,15 @@
 // Covid-19
 // A Covid-19 interactive display for current global case data.
+// 
+// Reuben Strangelove
+// Spring 2020 
 //
 // Covid-19 API: https://documenter.getpostman.com/view/2568274/SzS8rjbe?version=latest#intro
-// Notes:
 // Wifi credentials stored on SD card.
+//
+// License: Have fun, do whatever you want.
 
-// SD card is required for functionality, but may be disable for development.
+// SD card is required for functionality, but may be disabled easier development.
 #define USE_SD
 
 #include <Arduino.h>
@@ -81,14 +85,13 @@ String password;
 const char *dataFilePath = "/covid19data.txt";
 const char *wifiFilePath = "/wifi.txt";
 
-// Global variables
 #define MAX_COUNTRIES 32
 Date dateData;
 StatsData globalData;
 StatsData countryData[MAX_COUNTRIES];
-DisplayData displayData;
+
 char eventsData[13];
-int selectedCountryID = 0;
+int selectedCountryID = 14; // USA
 bool globalMode = false;
 ConnectionStatus connectionStatus = NoConnection;
 
@@ -243,7 +246,7 @@ void UpdateTFTDisplays(int countryID, StatsData globalData, StatsData countryDat
   tft2.printf("%s%*s", buffer, 8, "");
 
   // TFT 2: bottom data.
-  tft2.setCursor(x2Offset, tft2OffsetBottom);
+  tft2.setCursor(x2Offset, tft2OffsetBottom);  
   tft2.setTextSize(4);
   if (globalMode)
   {
@@ -251,7 +254,13 @@ void UpdateTFTDisplays(int countryID, StatsData globalData, StatsData countryDat
     tft2.printf("%s: %s%*s", countryCodes[countryID], buffer, 6, "");
   }
   else
-  {
+  {    
+    // Special cases to fit longer text into the window.
+    if (strlen(countryNames[countryID]) > 12)
+    {
+       tft2.setTextSize(3);
+    }
+    
     tft2.printf("%s%*s", countryNames[countryID], 12, "");
   }
 
@@ -398,6 +407,7 @@ HttpStatus GetCountryByDate(int countryId, Date date, StatsData *statsData)
   return Success;
 }
 
+// Get's the most recent record which is assumed to be the last record of the file.
 bool GetMostRecentRecord(Date *date, StatsData *globalData, StatsData countryData[], char eventsData[])
 {
   char buffer[2048];
@@ -715,11 +725,16 @@ void Animate(int selectedCountryID)
 
 bool InitSDCard()
 {
-
-  if (!SD.begin())
+ 
+ int count = 0  ;
+ while (!SD.begin())
   {
-    Serial.println("Card Mount Failed.");
-    return false;
+    if (++count > 5)
+    {      
+      Serial.println("Card Mount Failed.");
+      return false;
+    }
+    delay(250);
   }
 
   if (SD.cardType() == CARD_NONE)
@@ -742,8 +757,13 @@ void setup()
   pinMode(PIN_LED_CONNECTION, OUTPUT);
   pinMode(PIN_LED_ANIMATE, OUTPUT);
 
-  Wire.begin();
+  FastLED.addLeds<NEOPIXEL, PIN_NEOPIXEL>(leds, NUM_PIXELS);
+  FastLED.setBrightness(128); 
 
+  ledDisplay1.setBrightness(2);
+  ledDisplay2.setBrightness(2);
+
+  Wire.begin();
   pwmController1.resetDevices();
   pwmController1.init(0x01);
   pwmController2.init(0x02);
@@ -754,7 +774,7 @@ void setup()
   encoder.attachSingleEdge(PIN_ENCODER_A, PIN_ENCODER_B);
   encoder.clearCount();
 
-  tft1.initR(INITR_BLACKTAB);
+  tft1.initR(INITR_GREENTAB);
   tft2.begin();
   tft3.initR(INITR_BLACKTAB);
   tft1.fillScreen(ST77XX_BLACK);
@@ -766,17 +786,7 @@ void setup()
   tft1.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
   tft2.setTextColor(ILI9341_RED, ILI9341_BLACK);
   tft3.setTextColor(ST77XX_GREEN, ST77XX_BLACK);
-
-  FastLED.addLeds<NEOPIXEL, PIN_NEOPIXEL>(leds, NUM_PIXELS);
-  FastLED.setBrightness(128);
-
-  displayData.defaultCountryId = 14; // USA
-  displayData.selectMode = false;
-  UpdateTFTDisplays(selectedCountryID, globalData, countryData, globalMode);
-
-  ledDisplay1.setBrightness(2);
-  ledDisplay2.setBrightness(2);
-
+  
 // Mount SD card.
 // Init file if required.
 #if defined(USE_SD)
@@ -807,13 +817,14 @@ void setup()
   }
   Serial.printf("Wifi SSID: %s\nWifi password: %s\n", ssid.c_str(), password.c_str());
 #endif
+  
+  UpdateTFTDisplays(selectedCountryID, globalData, countryData, globalMode);
 
   Serial.println("Entering main loop.");
 }
 
 void loop(void)
 {
-
   static unsigned long selectTimoutMillis;
   static unsigned int updateDisplayDelayMillis = 0;
   static unsigned long WifiTimeoutMillis = 0;

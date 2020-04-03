@@ -18,14 +18,14 @@ void IncrementDate(Date &date)
 
 void FormatNumber(int number, char *buffer)
 {
-    if (number < 1000)
+    if (number < 999)
     {
         sprintf(buffer, "%i", number);
     }
     else if (number < 9999)
     {
-        int iPart = number / 100;
-        int fPart = number - (iPart * 100);
+        int iPart = number / 1000;
+        int fPart = number - (iPart * 1000);
         fPart = fPart / 10;
         sprintf(buffer, "%i.%iK", iPart, fPart);
     }
