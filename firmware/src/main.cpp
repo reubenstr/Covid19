@@ -1,27 +1,32 @@
-// Covid-19
-// A Covid-19 interactive display for current global case data.
-// 
-// Reuben Strangelove
-// Spring 2020 
-//
-// Covid-19 API: https://documenter.getpostman.com/view/2568274/SzS8rjbe?version=latest#intro
-// Wifi credentials stored on SD card.
-//
-// License: Have fun, do whatever you want.
+/* Covid-19
+* A Covid-19 interactive display for current global case data.
+* 
+* Reuben Strangelove
+* Spring 2020 
+*
+* MCU: ESP32 (ESP32 DEV KIT 1.0)
+* Extra hardware: TFT tft display, generic SD-Card reader, WS2812b led strips
+* 
+* Covid-19 API: https://documenter.getpostman.com/view/2568274/SzS8rjbe?version=latest#intro
+* Wifi credentials stored on SD card.
+*
+* License: Have fun, do whatever you want.
+*/
 
 // SD card is required for functionality, but may be disabled easier development.
 #define USE_SD
 
 #include <Arduino.h>
 #include <main.h>
+#include <Wire.h>
+#include "Adafruit_GFX.h"
+#include "Adafruit_ILI9341.h"
+#include "Adafruit_ST7735.h"
 #include "FS.h"
 #include <SPI.h>
 #include <SD.h>
 #include <string.h>
-#include "Adafruit_GFX.h"
-#include "Adafruit_ILI9341.h"
-#include "Adafruit_ST7735.h"
-#include <Wire.h>
+
 #include "PCA9685.h"       // https://github.com/NachtRaveVL/PCA9685-Arduino
 #include <ESP32Encoder.h>  // https://github.com/madhephaestus/ESP32Encoder
 #include <TM1637Display.h> // https://github.com/avishorp/TM1637
@@ -246,7 +251,7 @@ void UpdateTFTDisplays(int countryID, StatsData globalData, StatsData countryDat
   tft2.printf("%s%*s", buffer, 8, "");
 
   // TFT 2: bottom data.
-  tft2.setCursor(x2Offset, tft2OffsetBottom);  
+  tft2.setCursor(x2Offset, tft2OffsetBottom);
   tft2.setTextSize(4);
   if (globalMode)
   {
@@ -254,13 +259,13 @@ void UpdateTFTDisplays(int countryID, StatsData globalData, StatsData countryDat
     tft2.printf("%s: %s%*s", countryCodes[countryID], buffer, 6, "");
   }
   else
-  {    
+  {
     // Special cases to fit longer text into the window.
     if (strlen(countryNames[countryID]) > 12)
     {
-       tft2.setTextSize(3);
+      tft2.setTextSize(3);
     }
-    
+
     tft2.printf("%s%*s", countryNames[countryID], 12, "");
   }
 
@@ -437,7 +442,7 @@ bool GetMostRecentRecord(Date *date, StatsData *globalData, StatsData countryDat
 
     int year, month, day;
     const char *dateString = doc["Date"];
-    sscanf(dateString, "%i-%i-%i", &year, &month, &day);
+    sscanf(dateString, "%u-%u-%u", &year, &month, &day);
     date->year = year;
     date->month = month;
     date->day = day;
@@ -725,12 +730,12 @@ void Animate(int selectedCountryID)
 
 bool InitSDCard()
 {
- 
- int count = 0  ;
- while (!SD.begin())
+
+  int count = 0;
+  while (!SD.begin())
   {
     if (++count > 5)
-    {      
+    {
       Serial.println("Card Mount Failed.");
       return false;
     }
@@ -758,7 +763,7 @@ void setup()
   pinMode(PIN_LED_ANIMATE, OUTPUT);
 
   FastLED.addLeds<NEOPIXEL, PIN_NEOPIXEL>(leds, NUM_PIXELS);
-  FastLED.setBrightness(128); 
+  FastLED.setBrightness(128);
 
   ledDisplay1.setBrightness(2);
   ledDisplay2.setBrightness(2);
@@ -770,7 +775,7 @@ void setup()
   pwmController1.setPWMFrequency(1000);
   pwmController2.setPWMFrequency(1000);
 
-  ESP32Encoder::useInternalWeakPullResistors = false;
+  ESP32Encoder::useInternalWeakPullResistors = NONE;
   encoder.attachSingleEdge(PIN_ENCODER_A, PIN_ENCODER_B);
   encoder.clearCount();
 
@@ -786,7 +791,7 @@ void setup()
   tft1.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
   tft2.setTextColor(ILI9341_RED, ILI9341_BLACK);
   tft3.setTextColor(ST77XX_GREEN, ST77XX_BLACK);
-  
+
 // Mount SD card.
 // Init file if required.
 #if defined(USE_SD)
@@ -817,7 +822,7 @@ void setup()
   }
   Serial.printf("Wifi SSID: %s\nWifi password: %s\n", ssid.c_str(), password.c_str());
 #endif
-  
+
   UpdateTFTDisplays(selectedCountryID, globalData, countryData, globalMode);
 
   Serial.println("Entering main loop.");
