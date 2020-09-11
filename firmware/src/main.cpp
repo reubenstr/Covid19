@@ -5,6 +5,7 @@
 * Spring 2020 
 *
 * MCU: ESP32 (ESP32 DEV KIT 1.0)
+* PWM: 2x PCA9685 modules.
 * Extra hardware: TFT tft display, generic SD-Card reader, WS2812b led strips
 * 
 * Covid-19 API: https://documenter.getpostman.com/view/2568274/SzS8rjbe?version=latest#intro
