@@ -1,17 +1,30 @@
-/* Covid-19
-* A Covid-19 interactive display for current global case data.
-* 
-* Reuben Strangelove
-* Spring 2020 
-*
-* MCU: ESP32 (ESP32 DEV KIT 1.0)
-* PWM: 2x PCA9685 modules.
-* Extra hardware: TFT tft display, generic SD-Card reader, WS2812b led strips
-* 
-* Covid-19 API: https://documenter.getpostman.com/view/2568274/SzS8rjbe?version=latest#intro
-* Wifi credentials stored on SD card.
-*
-* License: Have fun, do whatever you want.
+/* 
+	Covid-19
+	Reuben Strangelove
+	Spring 2020 
+	
+	A Covid-19 interactive display for current global case data.
+
+	MCU: 
+		ESP32 (ESP32 DEV KIT 1.0)
+	
+	LED Driver:
+		2x I2C PCA9685 modules.
+	
+	Extra hardware:
+		TFT tft display, generic SD-Card reader, WS2812b led strips
+	API:
+		Covid-19: https://documenter.getpostman.com/view/2568274/SzS8rjbe?version=latest#intro
+	
+	Notes:
+		Wifi credentials stored on SD card.	
+		
+	Known Issues and after thoughts:
+		The LCD drivers are very slow as they are using software SPI. Hardware SPI
+		would greatly increase sysem responsiveness. As well as using interrupt timers
+		to handle events such as encoder updates.
+		
+		WiFi methods should be RTOS tasked to prevent blocking delays.		
 */
 
 // SD card is required for functionality, but may be disabled easier development.
@@ -28,12 +41,12 @@
 #include <SD.h>
 #include <string.h>
 
-#include "PCA9685.h"       // https://github.com/NachtRaveVL/PCA9685-Arduino
-#include <ESP32Encoder.h>  // https://github.com/madhephaestus/ESP32Encoder
-#include <TM1637Display.h> // https://github.com/avishorp/TM1637
+#include "PCA9685.h"       	// https://github.com/NachtRaveVL/PCA9685-Arduino
+#include <ESP32Encoder.h>  	// https://github.com/madhephaestus/ESP32Encoder
+#include <TM1637Display.h> 	// https://github.com/avishorp/TM1637
 #include <WiFi.h>
 #include <HTTPClient.h>
-#include <ArduinoJson.h> // https://arduinojson.org/
+#include <ArduinoJson.h> 	// https://arduinojson.org/
 
 #include "FastLED.h"
 
