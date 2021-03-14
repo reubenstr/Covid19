@@ -21,8 +21,8 @@
 		
 	Known Issues and after thoughts:
 		The LCD drivers are very slow as they are using software SPI. Hardware SPI
-		would greatly increase sysem responsiveness. As well as using interrupt timers
-		to handle events such as encoder updates.
+		would greatly increase sysem responsiveness. Using interrupt timers
+		to handle events such as encoder updates would increase system responsiveness.
 		
 		WiFi methods should be RTOS tasked to prevent blocking delays.		
 */
