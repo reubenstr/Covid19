@@ -1,5 +1,9 @@
-# Covid19 Tracker
+# Covid-19 Dashboard
+
+<img src="https://github.com/reubenstr/Covid19/blob/master/images/covid-19-dashboard-angle-1.jpg" width="640">
 
 WiFi enabled Covid-19 Dashboard.
 
-Gallery: https://photos.app.goo.gl/YpD76z5SM62VLCxZ8
+Source code not recommended for new projects.
+
+See https://github.com/reubenstr/QuoteBot for a more advanced ESP32 API connected project example.
