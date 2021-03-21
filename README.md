@@ -4,4 +4,6 @@
 
 WiFi enabled Covid-19 Dashboard.
 
-Source code not recommended for new projects. See https://github.com/reubenstr/QuoteBot for more advanced ESP32 API fetching example project.
+Source code not recommended for new projects.
+
+See https://github.com/reubenstr/QuoteBot for a more advanced ESP32 API connected project example.
