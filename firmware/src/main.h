@@ -1,6 +1,5 @@
 struct DisplayData
 {
-
     int confirmedGlobal;
     int deathsGlobal;
     int recoveredGlobal;
